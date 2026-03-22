@@ -4,6 +4,7 @@ Run this file to see the library in action
 """
 
 from datetime import datetime
+
 from coinbase_downloader import CoinbaseDownloader
 from data_handler import DataHandler
 
@@ -26,7 +27,7 @@ def example_list_symbols():
 def example_download_data():
     """Example: Download data for a symbol."""
     print("=" * 60)
-    print("EXAMPLE 2: Download Trade and Quote Data")
+    print("EXAMPLE 2: Download Quote Data")
     print("=" * 60)
     
     downloader = CoinbaseDownloader()
@@ -41,18 +42,16 @@ def example_download_data():
     print(f"Time range: {start_time} to {end_time}")
     
     try:
-        trades, quotes = downloader.get_historical_data(symbol, start_time, end_time)
+        quotes = downloader.get_historical_data(symbol, start_time, end_time)
         
-        print(f"✓ Downloaded {len(trades)} trades and {len(quotes)} quotes")
+        print(f"✓ Downloaded {len(quotes)} quotes")
         
         # Save to CSV
-        trades_file = f"{symbol}_trades.csv"
         quotes_file = f"{symbol}_quotes.csv"
         
-        data_handler.save_trades_to_csv(trades, trades_file)
         data_handler.save_quotes_to_csv(quotes, quotes_file)
         
-        print(f"✓ Saved to {trades_file} and {quotes_file}")
+        print(f"✓ Saved to {quotes_file}")
         
         # Display sample data
         if quotes:
@@ -60,11 +59,6 @@ def example_download_data():
             for quote in quotes[:3]:
                 print(f"  {quote['time']}: O={quote['open']}, H={quote['high']}, "
                       f"L={quote['low']}, C={quote['close']}, V={quote['volume']}")
-        
-        if trades:
-            print("\nSample trade data (first 3):")
-            for trade in trades[:3]:
-                print(f"  {trade['time']}: {trade['side']} {trade['size']} @ {trade['price']}")
         
     except Exception as e:
         print(f"✗ Error: {e}")

@@ -5,8 +5,8 @@ Main entry point for the console application
 """
 
 import argparse
-import sys
 import logging
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -85,22 +85,19 @@ def download_data(symbols: list, start_datetime: str, end_datetime: str, output_
                 logger.info(f"Downloading data for {symbol}...")
                 
                 # Download data
-                trades, quotes = downloader.get_historical_data(
+                quotes = downloader.get_historical_data(
                     symbol=symbol,
                     start_time=start_dt,
                     end_time=end_dt
                 )
                 
                 # Save to CSV files
-                trade_csv = output_path / f"{symbol}_trades_{start_dt.strftime('%Y%m%d_%H%M%S')}_to_{end_dt.strftime('%Y%m%d_%H%M%S')}.csv"
                 quote_csv = output_path / f"{symbol}_quotes_{start_dt.strftime('%Y%m%d_%H%M%S')}_to_{end_dt.strftime('%Y%m%d_%H%M%S')}.csv"
                 
-                data_handler.save_trades_to_csv(trades, trade_csv)
                 data_handler.save_quotes_to_csv(quotes, quote_csv)
                 
-                logger.info(f"✓ {symbol}: {len(trades)} trades and {len(quotes)} quotes saved")
-                print(f"✓ {symbol}: Saved {len(trades)} trades to {trade_csv.name}")
-                print(f"           Saved {len(quotes)} quotes to {quote_csv.name}")
+                logger.info(f"✓ {symbol}: {len(quotes)} quotes saved")
+                print(f"✓ {symbol}: Saved {len(quotes)} quotes to {quote_csv.name}")
                 
             except Exception as e:
                 logger.error(f"Failed to download data for {symbol}: {e}")
@@ -119,7 +116,7 @@ def download_data(symbols: list, start_datetime: str, end_datetime: str, output_
 def main() -> None:
     """Main entry point."""
     parser = argparse.ArgumentParser(
-        description='Download trade and quote data from Coinbase',
+        description='Download quote data from Coinbase',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog='''
 Examples:
@@ -155,7 +152,7 @@ Examples:
     # Download command
     download_parser = subparsers.add_parser(
         'download',
-        help='Download historical trade and quote data'
+        help='Download historical quote data'
     )
     download_parser.add_argument(
         'symbols',

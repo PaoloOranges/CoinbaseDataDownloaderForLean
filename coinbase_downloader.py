@@ -1,6 +1,6 @@
 """
 Coinbase API interaction module
-Handles downloading trade and quote data from Coinbase
+Handles downloading quote data from Coinbase
 """
 
 import logging
@@ -64,9 +64,9 @@ class CoinbaseDownloader:
         start_time: datetime,
         end_time: datetime,
         granularity: int = 60
-    ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    ) -> List[Dict[str, Any]]:
         """
-        Download historical trade and quote data for a symbol.
+        Download historical quote data for a symbol.
         
         Args:
             symbol: Trading pair (e.g., 'BTC-USD')
@@ -75,7 +75,7 @@ class CoinbaseDownloader:
             granularity: Candle granularity in seconds (60, 300, 900, 3600, 21600, 86400)
         
         Returns:
-            Tuple of (trades_list, quotes_list) containing historical data
+            List of quote dictionaries containing historical data
         """
         self.logger.info(f"Fetching historical data for {symbol} from {start_time} to {end_time}")
         
@@ -83,24 +83,16 @@ class CoinbaseDownloader:
         if not self._is_valid_symbol(symbol):
             raise ValueError(f"Invalid symbol: {symbol}")
         
-        trades = []
-        quotes = []
-        
         try:
             # Fetch candles (OHLC data) which represents price movements
             quotes = self._fetch_candles(symbol, start_time, end_time, granularity)
             self.logger.info(f"Fetched {len(quotes)} quote candles for {symbol}")
             
-            # Trade downloading temporarily disabled
-            # trades = self._fetch_trades(symbol, start_time, end_time)
-            # self.logger.info(f"Fetched {len(trades)} trades for {symbol}")
-            self.logger.debug("Trade download skipped (disabled in code)")
-            
         except requests.exceptions.RequestException as e:
             self.logger.error(f"API request failed for {symbol}: {e}")
             raise
         
-        return trades, quotes
+        return quotes
     
     def _fetch_candles(
         self,
@@ -170,58 +162,4 @@ class CoinbaseDownloader:
         
         return candles
     
-    def _fetch_trades(
-        self,
-        symbol: str,
-        start_time: datetime,
-        end_time: datetime
-    ) -> List[Dict[str, Any]]:
-        """
-        Fetch recent trade data.
-        
-        Note: Coinbase's public API only provides recent trades (last 100).
-        For complete historical trade data, the Advanced Trade API with authentication is needed.
-        
-        Args:
-            symbol: Trading pair
-            start_time: Start datetime (for filtering)
-            end_time: End datetime (for filtering)
-        
-        Returns:
-            List of trade dictionaries
-        """
-        trades = []
-        
-        try:
-            self.logger.debug(f"Fetching trades for {symbol}")
-            
-            # Coinbase free API only provides the latest trades
-            response = self.session.get(
-                f"{self.BASE_URL}/products/{symbol}/trades",
-                params={'limit': 100}
-            )
-            response.raise_for_status()
-            
-            batch_trades = response.json()
-            
-            # Parse trade data and filter by time range
-            for trade in batch_trades:
-                trade_time = datetime.fromisoformat(trade['time'].replace('Z', '+00:00'))
-                
-                if start_time <= trade_time <= end_time:
-                    trades.append({
-                        'symbol': symbol,
-                        'trade_id': trade.get('trade_id'),
-                        'time': trade['time'],
-                        'price': float(trade['price']),
-                        'size': float(trade['size']),
-                        'side': trade['side']
-                    })
-            
-            time.sleep(0.1)
-            
-        except requests.exceptions.RequestException as e:
-            self.logger.warning(f"Failed to fetch trades: {e}")
-            # For older data, trades might not be available via public API
-        
-        return sorted(trades, key=lambda x: x['time'])
+

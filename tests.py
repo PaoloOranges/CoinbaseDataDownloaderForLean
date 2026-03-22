@@ -85,38 +85,6 @@ class TestDataHandler(unittest.TestCase):
         import shutil
         shutil.rmtree(self.temp_dir, ignore_errors=True)
     
-    def test_save_and_load_trades(self):
-        """Test saving and loading trades."""
-        trades = [
-            {
-                'symbol': 'BTC-USD',
-                'trade_id': '123456',
-                'time': '2024-01-01T10:00:00Z',
-                'price': 42000.00,
-                'size': 0.5,
-                'side': 'buy'
-            },
-            {
-                'symbol': 'BTC-USD',
-                'trade_id': '123457',
-                'time': '2024-01-01T10:00:01Z',
-                'price': 42100.00,
-                'size': 1.0,
-                'side': 'sell'
-            }
-        ]
-        
-        csv_path = Path(self.temp_dir) / "test_trades.csv"
-        
-        # Save and load
-        self.handler.save_trades_to_csv(trades, csv_path)
-        loaded = self.handler.load_trades_from_csv(csv_path)
-        
-        # Verify
-        self.assertEqual(len(loaded), 2)
-        self.assertEqual(loaded[0]['symbol'], 'BTC-USD')
-        self.assertEqual(loaded[0]['price'], 42000.0)
-    
     def test_save_and_load_quotes(self):
         """Test saving and loading quotes."""
         quotes = [
