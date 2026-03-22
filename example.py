@@ -46,12 +46,12 @@ def example_download_data():
         
         print(f"✓ Downloaded {len(quotes)} quotes (1-hour granularity)")
         
-        # Save to CSV
-        quotes_file = f"{symbol}_quotes.csv"
+        # Save to CSV files (one per day)
+        from pathlib import Path
+        output_dir = Path(".")
+        data_handler.save_quotes_by_day(quotes, output_dir, "HOUR")
         
-        data_handler.save_quotes_to_csv(quotes, quotes_file)
-        
-        print(f"✓ Saved to {quotes_file}")
+        print(f"✓ Saved to daily CSV files in current directory")
         
         # Display sample data
         if quotes:

@@ -6,7 +6,7 @@ Handles saving and loading data in CSV format
 import csv
 import logging
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import Any, Dict, List
 
 
 class DataHandler:
@@ -54,6 +54,95 @@ class DataHandler:
         except IOError as e:
             self.logger.error(f"Failed to write quotes to {filepath}: {e}")
             raise
+    
+    def save_quotes_by_day(self, quotes: List[Dict[str, Any]], output_dir: Path, granularity: str) -> None:
+        """
+        Save quote data split by day with new filename format.
+        
+        Args:
+            quotes: List of quote dictionaries
+            output_dir: Output directory path
+            granularity: Granularity string ('MINUTE', 'HOUR', 'DAY')
+        """
+        if not quotes:
+            self.logger.warning("No quotes to save")
+            return
+        
+        from collections import defaultdict
+        from datetime import datetime
+        
+        # Group quotes by date
+        quotes_by_date = defaultdict(list)
+        for quote in quotes:
+            # Parse the time string to get date
+            time_str = quote.get('time', '')
+            if 'T' in time_str:
+                # ISO format: 2024-01-01T10:00:00Z
+                dt = datetime.fromisoformat(time_str.replace('Z', '+00:00'))
+            else:
+                # Assume it's already a date string
+                dt = datetime.strptime(time_str, '%Y-%m-%d')
+            date_key = dt.strftime('%Y%m%d')
+            quotes_by_date[date_key].append(quote)
+        
+        # Get symbol from first quote
+        symbol = quotes[0].get('symbol', 'unknown')
+        symbol_clean = symbol.lower().replace('-', '')
+        
+        # Map granularity to lowercase string
+        granularity_lower = granularity.lower()
+        
+        saved_files = 0
+        
+        for date_str, day_quotes in quotes_by_date.items():
+            try:
+                # Sort quotes by time (chronological order)
+                day_quotes.sort(key=lambda q: q.get('time', ''))
+                
+                # Create filename
+                filename = f"{date_str}_{symbol_clean}_{granularity_lower}_trade.csv"
+                filepath = output_dir / filename
+                
+                with open(filepath, 'w', newline='', encoding='utf-8') as csvfile:
+                    writer = csv.writer(csvfile)
+                    
+                    for quote in day_quotes:
+                        if granularity == 'MINUTE':
+                            # TIME_OF_DAY_MILLISECONDS,open,high,low,close,volume
+                            time_str = quote.get('time', '')
+                            if 'T' in time_str:
+                                dt = datetime.fromisoformat(time_str.replace('Z', '+00:00'))
+                                # Convert to milliseconds since start of day
+                                start_of_day = dt.replace(hour=0, minute=0, second=0, microsecond=0)
+                                milliseconds = int((dt - start_of_day).total_seconds() * 1000)
+                                time_value = str(milliseconds)
+                            else:
+                                time_value = time_str
+                        else:
+                            # yyyyMMdd HH:mm,open,high,low,close,volume
+                            time_str = quote.get('time', '')
+                            if 'T' in time_str:
+                                dt = datetime.fromisoformat(time_str.replace('Z', '+00:00'))
+                                time_value = dt.strftime('%Y%m%d %H:%M')
+                            else:
+                                time_value = time_str
+                        
+                        writer.writerow([
+                            time_value,
+                            quote.get('open', ''),
+                            quote.get('high', ''),
+                            quote.get('low', ''),
+                            quote.get('close', ''),
+                            quote.get('volume', '')
+                        ])
+                
+                self.logger.info(f"Saved {len(day_quotes)} quotes to {filename}")
+                saved_files += 1
+                
+            except IOError as e:
+                self.logger.error(f"Failed to write quotes for {date_str}: {e}")
+        
+        self.logger.info(f"Total: saved {len(quotes)} quotes across {saved_files} files")
     
     def load_quotes_from_csv(self, filepath: Path) -> List[Dict[str, Any]]:
         """

@@ -101,13 +101,11 @@ def download_data(symbols: list, start_datetime: str, end_datetime: str, output_
                     granularity=granularity_seconds
                 )
                 
-                # Save to CSV files
-                quote_csv = output_path / f"{symbol}_quotes_{start_dt.strftime('%Y%m%d_%H%M%S')}_to_{end_dt.strftime('%Y%m%d_%H%M%S')}.csv"
-                
-                data_handler.save_quotes_to_csv(quotes, quote_csv)
+                # Save to CSV files (one per day)
+                data_handler.save_quotes_by_day(quotes, output_path, granularity)
                 
                 logger.info(f"✓ {symbol}: {len(quotes)} quotes saved")
-                print(f"✓ {symbol}: Saved {len(quotes)} quotes to {quote_csv.name}")
+                print(f"✓ {symbol}: Saved {len(quotes)} quotes across daily files")
                 
             except Exception as e:
                 logger.error(f"Failed to download data for {symbol}: {e}")
