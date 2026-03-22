@@ -57,7 +57,7 @@ def list_symbols() -> None:
         sys.exit(1)
 
 
-def download_data(symbols: list, start_datetime: str, end_datetime: str, output_dir: str) -> None:
+def download_data(symbols: list, start_datetime: str, end_datetime: str, output_dir: str, granularity: str) -> None:
     """Download historical data for specified symbols."""
     logger = logging.getLogger(__name__)
     
@@ -70,6 +70,14 @@ def download_data(symbols: list, start_datetime: str, end_datetime: str, output_
             logger.error("Start datetime must be before end datetime")
             sys.exit(1)
         
+        # Map granularity string to seconds
+        granularity_map = {
+            'MINUTE': 60,
+            'HOUR': 3600,
+            'DAY': 86400
+        }
+        granularity_seconds = granularity_map[granularity]
+        
         # Create output directory if it doesn't exist
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
@@ -79,6 +87,7 @@ def download_data(symbols: list, start_datetime: str, end_datetime: str, output_
         
         logger.info(f"Starting download for {len(symbols)} symbol(s)")
         logger.info(f"Date range: {start_dt} to {end_dt}")
+        logger.info(f"Granularity: {granularity} ({granularity_seconds} seconds)")
         
         for symbol in symbols:
             try:
@@ -88,7 +97,8 @@ def download_data(symbols: list, start_datetime: str, end_datetime: str, output_
                 quotes = downloader.get_historical_data(
                     symbol=symbol,
                     start_time=start_dt,
-                    end_time=end_dt
+                    end_time=end_dt,
+                    granularity=granularity_seconds
                 )
                 
                 # Save to CSV files
@@ -123,11 +133,14 @@ Examples:
   # List all available symbols
   python main.py list-symbols
   
-  # Download data for a single symbol
+  # Download data for a single symbol (default minute granularity)
   python main.py download ETH-EUR --start 20240101-00:00:00 --end 20240131-23:59:59
   
-  # Download data for multiple symbols
-  python main.py download BTC-USD ETH-EUR --start 20240101-00:00:00 --end 20240131-23:59:59 --output ./data
+  # Download data for multiple symbols with hour granularity
+  python main.py download BTC-USD ETH-EUR --start 20240101-00:00:00 --end 20240131-23:59:59 --output ./data --granularity HOUR
+  
+  # Download daily data for a symbol
+  python main.py download BTC-USD --start 20240101-00:00:00 --end 20240131-23:59:59 --granularity DAY
   
   # Use verbose logging
   python main.py -v download BTC-USD --start 20240101-00:00:00 --end 20240131-23:59:59
@@ -174,6 +187,12 @@ Examples:
         default='./data',
         help='Output directory for CSV files (default: ./data)'
     )
+    download_parser.add_argument(
+        '--granularity',
+        choices=['MINUTE', 'HOUR', 'DAY'],
+        default='MINUTE',
+        help='Granularity of quote data (default: MINUTE)'
+    )
     
     args = parser.parse_args()
     
@@ -189,7 +208,8 @@ Examples:
                 symbols=args.symbols,
                 start_datetime=args.start,
                 end_datetime=args.end,
-                output_dir=args.output
+                output_dir=args.output,
+                granularity=args.granularity
             )
     except KeyboardInterrupt:
         logger.info("Operation cancelled by user")

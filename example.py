@@ -42,9 +42,9 @@ def example_download_data():
     print(f"Time range: {start_time} to {end_time}")
     
     try:
-        quotes = downloader.get_historical_data(symbol, start_time, end_time)
+        quotes = downloader.get_historical_data(symbol, start_time, end_time, granularity=3600)  # 1 hour granularity
         
-        print(f"✓ Downloaded {len(quotes)} quotes")
+        print(f"✓ Downloaded {len(quotes)} quotes (1-hour granularity)")
         
         # Save to CSV
         quotes_file = f"{symbol}_quotes.csv"
