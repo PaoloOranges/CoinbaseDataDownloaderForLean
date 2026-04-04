@@ -6,8 +6,11 @@ Handles saving and loading data in CSV format
 import csv
 import logging
 import zipfile
+from collections import defaultdict
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
+
+from utils import normalize_symbol, parse_iso_datetime
 
 
 class DataHandler:
@@ -32,7 +35,6 @@ class DataHandler:
         try:
             filepath = Path(filepath)
             
-            # Define CSV columns
             fieldnames = ['symbol', 'time', 'open', 'high', 'low', 'close', 'volume']
             
             with open(filepath, 'w', newline='', encoding='utf-8') as csvfile:
@@ -70,158 +72,97 @@ class DataHandler:
             self.logger.warning("No quotes to save")
             return
         
-        from collections import defaultdict
-        from datetime import datetime
-        
-        # Group quotes by date
-        quotes_by_date = defaultdict(list)
+        quotes_by_date: Dict[str, List[Tuple[Any, Dict[str, Any]]]] = defaultdict(list)
         for quote in quotes:
-            # Parse the time string to get date
             time_str = quote.get('time', '')
-            if 'T' in time_str:
-                # ISO format: 2024-01-01T10:00:00Z
-                dt = datetime.fromisoformat(time_str.replace('Z', '+00:00'))
-            else:
-                # Assume it's already a date string
-                dt = datetime.strptime(time_str, '%Y-%m-%d')
+            dt = parse_iso_datetime(time_str)
             date_key = dt.strftime('%Y%m%d')
-            quotes_by_date[date_key].append(quote)
+            quotes_by_date[date_key].append((dt, quote))
         
-        # Get symbol from first quote
         symbol = quotes[0].get('symbol', 'unknown')
-        symbol_clean = symbol.lower().replace('-', '')
-        
-        # Map granularity to lowercase string
+        symbol_clean = normalize_symbol(symbol)
         granularity_lower = granularity.lower()
         
-        # Create granularity-based subfolder
         granularity_folder = output_dir / granularity_lower
         granularity_folder.mkdir(parents=True, exist_ok=True)
         
-        # For MINUTE granularity, create symbol subfolder
         if granularity == 'MINUTE':
-            symbol_folder = granularity_folder / symbol_clean
-            symbol_folder.mkdir(parents=True, exist_ok=True)
-            base_folder = symbol_folder
+            base_folder = granularity_folder / symbol_clean
+            base_folder.mkdir(parents=True, exist_ok=True)
         else:
             base_folder = granularity_folder
         
         saved_zips = 0
+        temp_csv_files: List[Tuple[Path, str]] = []
         
-        if granularity == 'MINUTE':
-            # For MINUTE: one ZIP per day with daily CSV inside
-            for date_str, day_quotes in quotes_by_date.items():
-                try:
-                    # Sort quotes by time (chronological order)
-                    day_quotes.sort(key=lambda q: q.get('time', ''))
-                    
-                    # Create CSV filename (temporary, will be zipped)
+        for date_str, day_items in quotes_by_date.items():
+            try:
+                day_items.sort(key=lambda pair: pair[0])
+                if granularity == 'MINUTE':
                     csv_filename = f"{date_str}_{symbol_clean}_minute_trade.csv"
                     csv_filepath = base_folder / csv_filename
+                    self._write_csv(csv_filepath, day_items, granularity)
                     
-                    # Write CSV file
-                    with open(csv_filepath, 'w', newline='', encoding='utf-8') as csvfile:
-                        writer = csv.writer(csvfile)
-                        
-                        for quote in day_quotes:
-                            time_str = quote.get('time', '')
-                            if 'T' in time_str:
-                                dt = datetime.fromisoformat(time_str.replace('Z', '+00:00'))
-                                # Convert to milliseconds since start of day
-                                start_of_day = dt.replace(hour=0, minute=0, second=0, microsecond=0)
-                                milliseconds = int((dt - start_of_day).total_seconds() * 1000)
-                                time_value = str(milliseconds)
-                            else:
-                                time_value = time_str
-                            
-                            writer.writerow([
-                                time_value,
-                                quote.get('open', ''),
-                                quote.get('high', ''),
-                                quote.get('low', ''),
-                                quote.get('close', ''),
-                                quote.get('volume', '')
-                            ])
-                    
-                    # Create ZIP file with the CSV inside
                     zip_filename = f"{date_str}_trade.zip"
                     zip_filepath = base_folder / zip_filename
+                    self._zip_files(zip_filepath, [(csv_filepath, csv_filename)])
                     
-                    with zipfile.ZipFile(zip_filepath, 'w', zipfile.ZIP_DEFLATED) as zipf:
-                        zipf.write(csv_filepath, arcname=csv_filename)
-                    
-                    self.logger.info(f"Saved {len(day_quotes)} quotes to {zip_filepath}")
-                    
-                    # Delete CSV if not keeping them
                     if not keep_csv:
                         csv_filepath.unlink()
                         self.logger.debug(f"Deleted temporary CSV: {csv_filepath}")
                     
                     saved_zips += 1
-                    
-                except Exception as e:
-                    self.logger.error(f"Failed to process {date_str}: {e}")
-        
-        else:
-            # For HOUR and DAILY: all CSVs for symbol go into one ZIP file
-            try:
-                # Create temporary directory for all CSVs
-                temp_csv_files = []
-                
-                for date_str, day_quotes in quotes_by_date.items():
-                    # Sort quotes by time (chronological order)
-                    day_quotes.sort(key=lambda q: q.get('time', ''))
-                    
-                    # Create CSV filename (temporary, will be zipped)
+                else:
                     csv_filename = f"{date_str}_{symbol_clean}_{granularity_lower}_trade.csv"
                     csv_filepath = base_folder / csv_filename
-                    
-                    # Write CSV file
-                    with open(csv_filepath, 'w', newline='', encoding='utf-8') as csvfile:
-                        writer = csv.writer(csvfile)
-                        
-                        for quote in day_quotes:
-                            time_str = quote.get('time', '')
-                            if 'T' in time_str:
-                                dt = datetime.fromisoformat(time_str.replace('Z', '+00:00'))
-                                time_value = dt.strftime('%Y%m%d %H:%M')
-                            else:
-                                time_value = time_str
-                            
-                            writer.writerow([
-                                time_value,
-                                quote.get('open', ''),
-                                quote.get('high', ''),
-                                quote.get('low', ''),
-                                quote.get('close', ''),
-                                quote.get('volume', '')
-                            ])
-                    
+                    self._write_csv(csv_filepath, day_items, granularity)
                     temp_csv_files.append((csv_filepath, csv_filename))
                     self.logger.debug(f"Created temporary CSV: {csv_filename}")
-                
-                # Create single ZIP file with all CSVs for this symbol
-                zip_filename = f"{symbol_clean}_trade.zip"
-                zip_filepath = base_folder / zip_filename
-                
-                with zipfile.ZipFile(zip_filepath, 'w', zipfile.ZIP_DEFLATED) as zipf:
-                    for csv_filepath, csv_filename in temp_csv_files:
-                        zipf.write(csv_filepath, arcname=csv_filename)
-                
-                self.logger.info(f"Saved {len(quotes)} quotes to {zip_filepath}")
-                
-                # Delete CSVs if not keeping them
+            except Exception as e:
+                self.logger.error(f"Failed to process {date_str}: {e}")
+        
+        if granularity != 'MINUTE' and temp_csv_files:
+            zip_filename = f"{symbol_clean}_trade.zip"
+            zip_filepath = base_folder / zip_filename
+            try:
+                self._zip_files(zip_filepath, temp_csv_files)
+                self.logger.info(f"Saved {sum(len(items) for items in quotes_by_date.values())} quotes to {zip_filepath}")
                 if not keep_csv:
                     for csv_filepath, _ in temp_csv_files:
                         csv_filepath.unlink()
                         self.logger.debug(f"Deleted temporary CSV: {csv_filepath}")
-                
                 saved_zips += 1
-                
             except Exception as e:
                 self.logger.error(f"Failed to create {granularity_lower} ZIP file for {symbol}: {e}")
         
         self.logger.info(f"Total: saved {len(quotes)} quotes in {saved_zips} ZIP file(s)")
+    
+    def _write_csv(self, filepath: Path, items: List[Tuple[Any, Dict[str, Any]]], granularity: str) -> None:
+        filepath = Path(filepath)
+        with open(filepath, 'w', newline='', encoding='utf-8') as csvfile:
+            writer = csv.writer(csvfile)
+            for dt, quote in items:
+                writer.writerow(self._build_csv_row(dt, quote, granularity))
+    
+    def _build_csv_row(self, dt: Any, quote: Dict[str, Any], granularity: str) -> List[Any]:
+        if granularity == 'MINUTE':
+            start_of_day = dt.replace(hour=0, minute=0, second=0, microsecond=0)
+            time_value = str(int((dt - start_of_day).total_seconds() * 1000))
+        else:
+            time_value = dt.strftime('%Y%m%d %H:%M')
+        return [
+            time_value,
+            quote.get('open', ''),
+            quote.get('high', ''),
+            quote.get('low', ''),
+            quote.get('close', ''),
+            quote.get('volume', '')
+        ]
+    
+    def _zip_files(self, zip_filepath: Path, file_entries: List[Tuple[Path, str]]) -> None:
+        with zipfile.ZipFile(zip_filepath, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for csv_filepath, csv_filename in file_entries:
+                zipf.write(csv_filepath, arcname=csv_filename)
     
     def load_quotes_from_csv(self, filepath: Path) -> List[Dict[str, Any]]:
         """
@@ -254,7 +195,6 @@ class DataHandler:
             
             self.logger.info(f"Loaded {len(quotes)} quotes from {filepath}")
             return quotes
-            
         except IOError as e:
             self.logger.error(f"Failed to read quotes from {filepath}: {e}")
             raise

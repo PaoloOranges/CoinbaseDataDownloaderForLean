@@ -7,11 +7,11 @@ Main entry point for the console application
 import argparse
 import logging
 import sys
-from datetime import datetime
 from pathlib import Path
 
 from coinbase_downloader import CoinbaseDownloader
 from data_handler import DataHandler
+from utils import GRANULARITY_SECONDS, parse_datetime, validate_symbol_format
 
 
 def setup_logging(verbose: bool = False) -> None:
@@ -21,17 +21,6 @@ def setup_logging(verbose: bool = False) -> None:
         level=level,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
-
-
-def parse_datetime(datetime_str: str) -> datetime:
-    """Parse datetime string in format yyyyMMdd-hh:mm:ss."""
-    try:
-        return datetime.strptime(datetime_str, '%Y%m%d-%H:%M:%S')
-    except ValueError:
-        raise ValueError(
-            f"Invalid datetime format: {datetime_str}. "
-            f"Expected format: yyyyMMdd-hh:mm:ss (e.g., 20240101-09:30:00)"
-        )
 
 
 def list_symbols() -> None:
@@ -70,19 +59,22 @@ def download_data(symbols: list, start_datetime: str, end_datetime: str, output_
             logger.error("Start datetime must be before end datetime")
             sys.exit(1)
         
-        # Map granularity string to seconds
-        granularity_map = {
-            'MINUTE': 60,
-            'HOUR': 3600,
-            'DAILY': 86400
-        }
-        granularity_seconds = granularity_map[granularity]
+        invalid_formats = [symbol for symbol in symbols if not validate_symbol_format(symbol)]
+        if invalid_formats:
+            raise ValueError(f"Invalid symbol format(s): {', '.join(invalid_formats)}")
+        
+        granularity_seconds = GRANULARITY_SECONDS[granularity]
         
         # Create output directory if it doesn't exist
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
         
         downloader = CoinbaseDownloader()
+        available_symbols = downloader.get_available_symbols()
+        unknown_symbols = [symbol for symbol in symbols if symbol not in available_symbols]
+        if unknown_symbols:
+            raise ValueError(f"Unknown symbol(s): {', '.join(unknown_symbols)}")
+        
         data_handler = DataHandler()
         
         logger.info(f"Starting download for {len(symbols)} symbol(s)")

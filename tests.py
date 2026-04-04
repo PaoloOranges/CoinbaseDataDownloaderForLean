@@ -3,26 +3,42 @@ Unit tests for Coinbase Data Downloader
 Run with: python -m pytest tests/ -v
 """
 
-import unittest
-from datetime import datetime
-from pathlib import Path
 import tempfile
-import os
+import unittest
 import zipfile
+from datetime import datetime, timedelta
+from pathlib import Path
+from unittest.mock import Mock, patch
 
+import requests
+
+from coinbase_downloader import CoinbaseDownloader
+from data_handler import DataHandler
 from utils import (
-    validate_datetime_format,
-    validate_symbol_format,
     format_bytes,
     format_number,
-    get_date_range_description
+    get_date_range_description,
+    normalize_symbol,
+    parse_datetime,
+    validate_datetime_format,
+    validate_symbol_format,
 )
-from data_handler import DataHandler
 
 
 class TestUtilityFunctions(unittest.TestCase):
     """Test utility functions."""
     
+    def test_parse_datetime_valid(self):
+        self.assertEqual(parse_datetime("20240101-00:00:00"), datetime(2024, 1, 1, 0, 0, 0))
+
+    def test_parse_datetime_invalid(self):
+        with self.assertRaises(ValueError):
+            parse_datetime("2024-01-01 00:00:00")
+
+    def test_normalize_symbol(self):
+        self.assertEqual(normalize_symbol("BTC-USD"), "btcusd")
+        self.assertEqual(normalize_symbol("ETH-EUR"), "etheur")
+
     def test_validate_datetime_format_valid(self):
         """Test valid datetime formats."""
         self.assertTrue(validate_datetime_format("20240101-00:00:00"))
@@ -110,6 +126,61 @@ class TestDataHandler(unittest.TestCase):
         self.assertEqual(len(loaded), 1)
         self.assertEqual(loaded[0]['symbol'], 'ETH-USD')
         self.assertEqual(loaded[0]['close'], 2040.0)
+
+
+class TestCoinbaseDownloader(unittest.TestCase):
+    """Test Coinbase downloader batching and retry behavior."""
+
+    def test_request_with_retry_retries_and_succeeds(self):
+        downloader = CoinbaseDownloader()
+        first_response = Mock()
+        first_response.status_code = 500
+        first_response.raise_for_status.side_effect = requests.exceptions.HTTPError("Server error")
+
+        second_response = Mock()
+        second_response.status_code = 200
+        second_response.raise_for_status.return_value = None
+        second_response.json.return_value = []
+
+        with patch.object(downloader, '_throttle', return_value=None), \
+                patch.object(downloader.session, 'request', side_effect=[first_response, second_response]) as mock_request:
+            response = downloader._request_with_retry('GET', downloader.BASE_URL + '/products')
+            self.assertEqual(mock_request.call_count, 2)
+            self.assertEqual(response.json(), [])
+
+    def test_get_available_symbols_uses_cache(self):
+        downloader = CoinbaseDownloader()
+        product_list = [{'id': 'BTC-USD', 'quote_currency': 'USD', 'trading_disabled': False}]
+
+        successful_response = Mock()
+        successful_response.status_code = 200
+        successful_response.raise_for_status.return_value = None
+        successful_response.json.return_value = product_list
+
+        with patch.object(downloader, '_throttle', return_value=None), \
+                patch.object(downloader.session, 'request', return_value=successful_response) as mock_request:
+            symbols_first = downloader.get_available_symbols()
+            symbols_second = downloader.get_available_symbols()
+
+            self.assertEqual(symbols_first, ['BTC-USD'])
+            self.assertEqual(symbols_second, ['BTC-USD'])
+            self.assertEqual(mock_request.call_count, 1)
+
+    def test_fetch_candles_batches_multiple_requests(self):
+        downloader = CoinbaseDownloader()
+        start = datetime(2024, 1, 1, 0, 0, 0)
+        end = start + timedelta(minutes=301)
+
+        first_response = Mock()
+        first_response.json.return_value = [[int(start.timestamp()), 100, 110, 90, 105, 1000]]
+        second_response = Mock()
+        second_response.json.return_value = [[int((start + timedelta(minutes=300)).timestamp()), 101, 111, 91, 106, 1100]]
+
+        with patch.object(downloader, '_throttle', return_value=None), \
+                patch.object(downloader, '_request_with_retry', side_effect=[first_response, second_response]) as mock_request:
+            candles = downloader._fetch_candles('BTC-USD', start, end, 60)
+            self.assertEqual(len(candles), 2)
+            self.assertEqual(mock_request.call_count, 2)
 
 
 class TestCompressionAndFolderStructure(unittest.TestCase):

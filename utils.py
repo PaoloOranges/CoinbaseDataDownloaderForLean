@@ -4,6 +4,60 @@ Utility functions for the Coinbase Data Downloader
 
 import re
 from datetime import datetime
+from typing import Dict
+
+GRANULARITY_SECONDS: Dict[str, int] = {
+    'MINUTE': 60,
+    'HOUR': 3600,
+    'DAILY': 86400
+}
+
+
+def parse_datetime(datetime_str: str) -> datetime:
+    """
+    Parse a datetime string in format yyyyMMdd-hh:mm:ss.
+    
+    Args:
+        datetime_str: String to parse
+    
+    Returns:
+        Parsed datetime object
+    """
+    pattern = r'^\d{8}-\d{2}:\d{2}:\d{2}$'
+    if not re.match(pattern, datetime_str):
+        raise ValueError(
+            f"Invalid datetime format: {datetime_str}. "
+            f"Expected format: yyyyMMdd-hh:mm:ss (e.g., 20240101-09:30:00)"
+        )
+    return datetime.strptime(datetime_str, '%Y%m%d-%H:%M:%S')
+
+
+def parse_iso_datetime(time_str: str) -> datetime:
+    """
+    Parse an ISO-style datetime string, normalizing UTC Z timezone suffix.
+    
+    Args:
+        time_str: ISO datetime string
+    
+    Returns:
+        Parsed datetime object
+    """
+    if time_str.endswith('Z'):
+        time_str = time_str.replace('Z', '+00:00')
+    return datetime.fromisoformat(time_str)
+
+
+def normalize_symbol(symbol: str) -> str:
+    """
+    Normalize symbol names for file and folder paths.
+    
+    Args:
+        symbol: Symbol string (e.g., BTC-USD)
+    
+    Returns:
+        Normalized symbol (e.g., btcusd)
+    """
+    return symbol.lower().replace('-', '')
 
 
 def validate_datetime_format(datetime_str: str) -> bool:
@@ -30,7 +84,6 @@ def validate_symbol_format(symbol: str) -> bool:
     Returns:
         True if format is valid, False otherwise
     """
-    # Symbols typically follow pattern: CURRENCY-QUOTE (e.g., BTC-USD, ETH-EUR)
     pattern = r'^[A-Z0-9]+-[A-Z]+$'
     return bool(re.match(pattern, symbol))
 
