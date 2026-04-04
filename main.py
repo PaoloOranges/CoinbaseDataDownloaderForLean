@@ -57,7 +57,7 @@ def list_symbols() -> None:
         sys.exit(1)
 
 
-def download_data(symbols: list, start_datetime: str, end_datetime: str, output_dir: str, granularity: str) -> None:
+def download_data(symbols: list, start_datetime: str, end_datetime: str, output_dir: str, granularity: str, keep_csv: bool = False) -> None:
     """Download historical data for specified symbols."""
     logger = logging.getLogger(__name__)
     
@@ -74,7 +74,7 @@ def download_data(symbols: list, start_datetime: str, end_datetime: str, output_
         granularity_map = {
             'MINUTE': 60,
             'HOUR': 3600,
-            'DAY': 86400
+            'DAILY': 86400
         }
         granularity_seconds = granularity_map[granularity]
         
@@ -88,6 +88,7 @@ def download_data(symbols: list, start_datetime: str, end_datetime: str, output_
         logger.info(f"Starting download for {len(symbols)} symbol(s)")
         logger.info(f"Date range: {start_dt} to {end_dt}")
         logger.info(f"Granularity: {granularity} ({granularity_seconds} seconds)")
+        logger.info(f"Keep CSV files: {keep_csv}")
         
         for symbol in symbols:
             try:
@@ -101,11 +102,11 @@ def download_data(symbols: list, start_datetime: str, end_datetime: str, output_
                     granularity=granularity_seconds
                 )
                 
-                # Save to CSV files (one per day)
-                data_handler.save_quotes_by_day(quotes, output_path, granularity)
+                # Save to compressed ZIP files with new folder structure
+                data_handler.save_quotes_by_day(quotes, output_path, granularity, keep_csv=keep_csv)
                 
                 logger.info(f"✓ {symbol}: {len(quotes)} quotes saved")
-                print(f"✓ {symbol}: Saved {len(quotes)} quotes across daily files")
+                print(f"✓ {symbol}: Saved {len(quotes)} quotes to ZIP file(s)")
                 
             except Exception as e:
                 logger.error(f"Failed to download data for {symbol}: {e}")
@@ -138,7 +139,7 @@ Examples:
   python main.py download BTC-USD ETH-EUR --start 20240101-00:00:00 --end 20240131-23:59:59 --output ./data --granularity HOUR
   
   # Download daily data for a symbol
-  python main.py download BTC-USD --start 20240101-00:00:00 --end 20240131-23:59:59 --granularity DAY
+  python main.py download BTC-USD --start 20240101-00:00:00 --end 20240131-23:59:59 --granularity DAILY
   
   # Use verbose logging
   python main.py -v download BTC-USD --start 20240101-00:00:00 --end 20240131-23:59:59
@@ -187,9 +188,14 @@ Examples:
     )
     download_parser.add_argument(
         '--granularity',
-        choices=['MINUTE', 'HOUR', 'DAY'],
+        choices=['MINUTE', 'HOUR', 'DAILY'],
         default='MINUTE',
         help='Granularity of quote data (default: MINUTE)'
+    )
+    download_parser.add_argument(
+        '--keep-csv',
+        action='store_true',
+        help='Keep CSV files after compression (default: delete them)'
     )
     
     args = parser.parse_args()
@@ -207,7 +213,8 @@ Examples:
                 start_datetime=args.start,
                 end_datetime=args.end,
                 output_dir=args.output,
-                granularity=args.granularity
+                granularity=args.granularity,
+                keep_csv=args.keep_csv
             )
     except KeyboardInterrupt:
         logger.info("Operation cancelled by user")

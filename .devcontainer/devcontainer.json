@@ -1,5 +1,5 @@
 {
-  "name": "Python 3.14 Video Encoding",
+  "name": "Python 3.14 Coinbase Downloader Dev Container",
   "image": "mcr.microsoft.com/devcontainers/python:3.14",
   "workspaceFolder": "/workspace",
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
