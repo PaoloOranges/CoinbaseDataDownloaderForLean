@@ -6,7 +6,7 @@ Handles downloading quote data from Coinbase
 import logging
 import time
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 
@@ -129,7 +129,7 @@ class CoinbaseDownloader:
         start_time: datetime,
         end_time: datetime,
         granularity: int = 60
-    ) -> List[Dict[str, Any]]:
+    ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
         """
         Download historical quote data for a symbol.
         
@@ -140,7 +140,7 @@ class CoinbaseDownloader:
             granularity: Candle granularity in seconds (60, 300, 900, 3600, 21600, 86400)
         
         Returns:
-            List of quote dictionaries containing historical data
+            Tuple of (list of quote dictionaries containing historical data, max timestamp string)
         """
         self.logger.info(f"Fetching historical data for {symbol} from {start_time} to {end_time}")
         
@@ -150,11 +150,12 @@ class CoinbaseDownloader:
         try:
             quotes = self._fetch_candles(symbol, start_time, end_time, granularity)
             self.logger.info(f"Fetched {len(quotes)} quote candles for {symbol}")
+            max_timestamp = max((q['time'] for q in quotes), default=None) if quotes else None
         except requests.exceptions.RequestException as e:
             self.logger.error(f"API request failed for {symbol}: {e}")
             raise
         
-        return quotes
+        return quotes, max_timestamp
     
     def _fetch_candles(
         self,

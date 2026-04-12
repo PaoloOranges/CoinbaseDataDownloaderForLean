@@ -4,6 +4,7 @@ Handles saving and loading data in CSV format
 """
 
 import csv
+import json
 import logging
 import zipfile
 from collections import defaultdict
@@ -198,3 +199,40 @@ class DataHandler:
         except IOError as e:
             self.logger.error(f"Failed to read quotes from {filepath}: {e}")
             raise
+    
+    def load_timestamps(self, data_dir: Path) -> Dict[str, Dict[str, str]]:
+        """
+        Load last timestamps from JSON file.
+        
+        Args:
+            data_dir: Directory containing the timestamps file
+        
+        Returns:
+            Dictionary of symbol to last timestamp
+        """
+        timestamps_file = data_dir / "coinbase-download-last-timestamps.json"
+        if not timestamps_file.exists():
+            return {}
+        try:
+            with open(timestamps_file, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            self.logger.warning(f"Failed to load timestamps: {e}")
+            return {}
+    
+    def save_timestamps(self, data_dir: Path, timestamps: Dict[str, Dict[str, str]]) -> None:
+        """
+        Save last timestamps to JSON file.
+        
+        Args:
+            data_dir: Directory to save the timestamps file
+            timestamps: Dictionary of symbol to last timestamp
+        """
+        timestamps_file = data_dir / "coinbase-download-last-timestamps.json"
+        try:
+            data_dir.mkdir(parents=True, exist_ok=True)
+            with open(timestamps_file, 'w', encoding='utf-8') as f:
+                json.dump(timestamps, f, indent=2)
+            self.logger.debug(f"Saved timestamps to {timestamps_file}")
+        except Exception as e:
+            self.logger.error(f"Failed to save timestamps: {e}")

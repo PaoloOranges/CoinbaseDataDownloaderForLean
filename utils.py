@@ -146,3 +146,30 @@ def get_date_range_description(start_dt: datetime, end_dt: datetime) -> str:
         parts.append(f"{minutes} minute{'s' if minutes > 1 else ''}")
     
     return ", ".join(parts) if parts else "less than 1 minute"
+
+
+def parse_symbols_file(file_path: str) -> list[str]:
+    """
+    Parse symbols from a file, supporting comma, semicolon, or newline separated values.
+    
+    Args:
+        file_path: Path to the symbols file
+    
+    Returns:
+        List of symbol strings
+    """
+    symbols = []
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+            # Split by comma, semicolon, or newline
+            parts = re.split(r'[,\n;]+', content)
+            for part in parts:
+                symbol = part.strip()
+                if symbol and validate_symbol_format(symbol):
+                    symbols.append(symbol)
+    except FileNotFoundError:
+        raise ValueError(f"Symbols file not found: {file_path}")
+    except Exception as e:
+        raise ValueError(f"Error reading symbols file: {e}")
+    return symbols
