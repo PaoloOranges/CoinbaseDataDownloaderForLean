@@ -29,7 +29,10 @@ class TestUtilityFunctions(unittest.TestCase):
     """Test utility functions."""
     
     def test_parse_datetime_valid(self):
-        self.assertEqual(parse_datetime("20240101-00:00:00"), datetime(2024, 1, 1, 0, 0, 0))
+        from datetime import timezone
+        result = parse_datetime("20240101-00:00:00")
+        expected = datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+        self.assertEqual(result, expected)
 
     def test_parse_datetime_invalid(self):
         with self.assertRaises(ValueError):
@@ -221,7 +224,7 @@ class TestDataHandler(unittest.TestCase):
     
     def test_start_time_defaults_to_2_years_ago(self):
         """Test that start_time defaults to 2 years ago when no timestamp file entry."""
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta, timezone
         
         # No timestamps for this symbol
         data_dir = Path(self.temp_dir)
@@ -232,10 +235,10 @@ class TestDataHandler(unittest.TestCase):
         if last_timestamp_str:
             start_dt = None  # Would use file
         else:
-            start_dt = datetime.now() - timedelta(days=730)
+            start_dt = datetime.now(tz=timezone.utc) - timedelta(days=730)
         
         # Verify it's approximately 2 years ago (within 1 day tolerance for test execution time)
-        now = datetime.now()
+        now = datetime.now(tz=timezone.utc)
         two_years_ago = now - timedelta(days=730)
         duration_days = (now - start_dt).days
         
@@ -244,13 +247,13 @@ class TestDataHandler(unittest.TestCase):
     
     def test_end_time_defaults_to_yesterday_2359(self):
         """Test that end_time defaults to yesterday at 23:59:59."""
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta, timezone
         
         # Simulate default end_time logic (no --end-time argument)
-        end_dt = (datetime.now().replace(hour=23, minute=59, second=59) - timedelta(days=1))
+        end_dt = (datetime.now(tz=timezone.utc).replace(hour=23, minute=59, second=59) - timedelta(days=1))
         
         # Verify it's yesterday
-        today = datetime.now().date()
+        today = datetime.now(tz=timezone.utc).date()
         yesterday = today - timedelta(days=1)
         
         self.assertEqual(end_dt.date(), yesterday)
@@ -260,14 +263,16 @@ class TestDataHandler(unittest.TestCase):
     
     def test_explicit_end_time_overrides_default(self):
         """Test that explicit --end-time argument overrides default."""
+        from datetime import timezone
+
         from utils import parse_datetime
         
         # Simulate explicit --end-time argument
         explicit_end = '20260401-15:30:45'
         end_dt = parse_datetime(explicit_end)
         
-        # Verify it matches the explicit value
-        expected = datetime(2026, 4, 1, 15, 30, 45)
+        # Verify it matches the explicit value (with UTC timezone)
+        expected = datetime(2026, 4, 1, 15, 30, 45, tzinfo=timezone.utc)
         self.assertEqual(end_dt, expected)
         
         # Verify it's NOT yesterday at 23:59:59

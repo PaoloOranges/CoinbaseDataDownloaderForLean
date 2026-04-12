@@ -96,7 +96,7 @@ def download_data(output_dir: str, symbols_file: str, symbols: list, granularity
         logger.info(f"Granularity: {granularity} ({granularity_seconds} seconds)")
         logger.info(f"Keep CSV files: {keep_csv}")
         
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta, timezone
         
         for symbol in symbols:
             try:
@@ -108,12 +108,12 @@ def download_data(output_dir: str, symbols_file: str, symbols: list, granularity
                         start_dt = parse_iso_datetime(last_timestamp_str) + timedelta(seconds=granularity_seconds)
                     else:
                         # Default to 2 years ago if no timestamp
-                        start_dt = datetime.now() - timedelta(days=730)
+                        start_dt = datetime.now(tz=timezone.utc) - timedelta(days=730)
                 
                 if end_time:
                     end_dt = parse_datetime(end_time)
                 else:
-                    end_dt = (datetime.now().replace(hour=23, minute=59, second=59) - timedelta(days=1))
+                    end_dt = (datetime.now(tz=timezone.utc).replace(hour=23, minute=59, second=59) - timedelta(days=1))
                 
                 if start_dt >= end_dt:
                     logger.info(f"✓ {symbol}: No new data to download")

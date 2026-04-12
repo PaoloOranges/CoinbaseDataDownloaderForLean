@@ -3,7 +3,7 @@ Utility functions for the Coinbase Data Downloader
 """
 
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict
 
 GRANULARITY_SECONDS: Dict[str, int] = {
@@ -16,12 +16,13 @@ GRANULARITY_SECONDS: Dict[str, int] = {
 def parse_datetime(datetime_str: str) -> datetime:
     """
     Parse a datetime string in format yyyyMMdd-hh:mm:ss.
+    Assumes input is UTC and returns timezone-aware datetime.
     
     Args:
         datetime_str: String to parse
     
     Returns:
-        Parsed datetime object
+        Parsed datetime object with UTC timezone
     """
     pattern = r'^\d{8}-\d{2}:\d{2}:\d{2}$'
     if not re.match(pattern, datetime_str):
@@ -29,7 +30,9 @@ def parse_datetime(datetime_str: str) -> datetime:
             f"Invalid datetime format: {datetime_str}. "
             f"Expected format: yyyyMMdd-hh:mm:ss (e.g., 20240101-09:30:00)"
         )
-    return datetime.strptime(datetime_str, '%Y%m%d-%H:%M:%S')
+    dt = datetime.strptime(datetime_str, '%Y%m%d-%H:%M:%S')
+    # Make it UTC-aware
+    return dt.replace(tzinfo=timezone.utc)
 
 
 def parse_iso_datetime(time_str: str) -> datetime:
