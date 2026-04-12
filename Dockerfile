@@ -4,15 +4,20 @@ FROM python:3.14-alpine
 # Set working directory
 WORKDIR /app
 
-# Copy requirements and install dependencies
-COPY requirements.txt .
+# Copy only necessary files for installation
+COPY requirements.txt setup.py .
+COPY coinbase_downloader/ ./coinbase_downloader/
+COPY tests/ ./tests/
+COPY pytest.ini conftest.py ./
+
+# Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the application code
-COPY . .
+# Install the package
+RUN pip install --no-cache-dir -e .
 
 # Ensure data directory exists for mounting
 RUN mkdir -p /app/data
 
-# Set entrypoint to run the download command
-ENTRYPOINT ["python", "main.py", "download"]
+# Set entrypoint to the console script
+ENTRYPOINT ["coinbase-downloader", "download"]
