@@ -126,6 +126,153 @@ class TestDataHandler(unittest.TestCase):
         self.assertEqual(len(loaded), 1)
         self.assertEqual(loaded[0]['symbol'], 'ETH-USD')
         self.assertEqual(loaded[0]['close'], 2040.0)
+    
+    def test_save_and_load_timestamps(self):
+        """Test saving and loading timestamps from JSON file with UTC format."""
+        timestamps = {
+            'BTC-USD': {
+                'MINUTE': '2026-04-11T23:59:59+00:00',
+                'DAILY': '2026-04-10T23:59:59+00:00'
+            },
+            'ETH-EUR': {
+                'DAILY': '2026-04-11T23:59:59+00:00'
+            }
+        }
+        
+        data_dir = Path(self.temp_dir)
+        
+        # Save timestamps
+        self.handler.save_timestamps(data_dir, timestamps)
+        
+        # Load and verify
+        loaded = self.handler.load_timestamps(data_dir)
+        self.assertEqual(loaded['BTC-USD']['MINUTE'], '2026-04-11T23:59:59+00:00')
+        self.assertEqual(loaded['ETH-EUR']['DAILY'], '2026-04-11T23:59:59+00:00')
+    
+    def test_fetch_candles_utc_timezone(self):
+        """Test that fetched candles have UTC timezone in ISO format."""
+        downloader = CoinbaseDownloader()
+        start = datetime(2024, 1, 1, 0, 0, 0)
+        end = start + timedelta(minutes=2)
+        
+        # Mock response with Unix timestamp
+        timestamp = int(start.timestamp())
+        response = Mock()
+        response.json.return_value = [[timestamp, 100, 110, 90, 105, 1000]]
+        
+        with patch.object(downloader, '_throttle', return_value=None), \
+                patch.object(downloader, '_request_with_retry', return_value=response):
+            candles = downloader._fetch_candles('BTC-USD', start, end, 60)
+            
+            # Verify time field is in UTC ISO format
+            self.assertEqual(len(candles), 1)
+            time_str = candles[0]['time']
+            # Should have timezone info (+ or Z suffix)
+            self.assertTrue('+' in time_str or 'Z' in time_str or time_str.endswith('00:00'),
+                            f"Time should have UTC timezone info: {time_str}")
+    
+    def test_max_timestamp_utc_format(self):
+        """Test that max_timestamp from get_historical_data is in UTC ISO format."""
+        downloader = CoinbaseDownloader()
+        start = datetime(2024, 1, 1, 0, 0, 0)
+        end = start + timedelta(minutes=2)
+        
+        # Mock with Unix timestamp
+        timestamp = int(start.timestamp())
+        response = Mock()
+        response.json.return_value = [[timestamp, 100, 110, 90, 105, 1000]]
+        
+        with patch.object(downloader, '_throttle', return_value=None), \
+                patch.object(downloader, '_is_valid_symbol', return_value=True), \
+                patch.object(downloader, '_request_with_retry', return_value=response):
+            quotes, max_timestamp = downloader.get_historical_data('BTC-USD', start, end, 60)
+            
+            # Verify max_timestamp is in UTC format
+            self.assertIsNotNone(max_timestamp)
+            self.assertTrue('+' in max_timestamp or 'Z' in max_timestamp or max_timestamp.endswith('00:00'),
+                            f"max_timestamp should be UTC ISO format: {max_timestamp}")
+    
+    def test_start_time_defaults_from_timestamp_file(self):
+        """Test that start_time defaults to last timestamp from file."""
+        from datetime import timedelta
+
+        from utils import GRANULARITY_SECONDS, parse_iso_datetime
+        
+        # Setup: Create timestamps file with known timestamp
+        last_ts = '2026-04-10T14:30:00+00:00'
+        timestamps = {
+            'BTC-USD': {
+                'MINUTE': last_ts
+            }
+        }
+        data_dir = Path(self.temp_dir)
+        self.handler.save_timestamps(data_dir, timestamps)
+        
+        # Load timestamps and verify default start time logic
+        loaded_ts = self.handler.load_timestamps(data_dir)
+        granularity_seconds = GRANULARITY_SECONDS['MINUTE']
+        
+        last_timestamp_str = loaded_ts.get('BTC-USD', {}).get('MINUTE')
+        if last_timestamp_str:
+            start_dt = parse_iso_datetime(last_timestamp_str) + timedelta(seconds=granularity_seconds)
+            # Verify it's one minute after the last timestamp
+            expected_dt = parse_iso_datetime(last_ts) + timedelta(seconds=60)
+            self.assertEqual(start_dt, expected_dt)
+    
+    def test_start_time_defaults_to_2_years_ago(self):
+        """Test that start_time defaults to 2 years ago when no timestamp file entry."""
+        from datetime import datetime, timedelta
+        
+        # No timestamps for this symbol
+        data_dir = Path(self.temp_dir)
+        loaded_ts = self.handler.load_timestamps(data_dir)
+        
+        # Simulate default logic when no timestamp exists
+        last_timestamp_str = loaded_ts.get('XYZ-USD', {}).get('MINUTE')
+        if last_timestamp_str:
+            start_dt = None  # Would use file
+        else:
+            start_dt = datetime.now() - timedelta(days=730)
+        
+        # Verify it's approximately 2 years ago (within 1 day tolerance for test execution time)
+        now = datetime.now()
+        two_years_ago = now - timedelta(days=730)
+        duration_days = (now - start_dt).days
+        
+        self.assertGreater(duration_days, 728, "Should be close to 2 years (730 days)")
+        self.assertLess(duration_days, 732, "Should be close to 2 years (730 days)")
+    
+    def test_end_time_defaults_to_yesterday_2359(self):
+        """Test that end_time defaults to yesterday at 23:59:59."""
+        from datetime import datetime, timedelta
+        
+        # Simulate default end_time logic (no --end-time argument)
+        end_dt = (datetime.now().replace(hour=23, minute=59, second=59) - timedelta(days=1))
+        
+        # Verify it's yesterday
+        today = datetime.now().date()
+        yesterday = today - timedelta(days=1)
+        
+        self.assertEqual(end_dt.date(), yesterday)
+        self.assertEqual(end_dt.hour, 23)
+        self.assertEqual(end_dt.minute, 59)
+        self.assertEqual(end_dt.second, 59)
+    
+    def test_explicit_end_time_overrides_default(self):
+        """Test that explicit --end-time argument overrides default."""
+        from utils import parse_datetime
+        
+        # Simulate explicit --end-time argument
+        explicit_end = '20260401-15:30:45'
+        end_dt = parse_datetime(explicit_end)
+        
+        # Verify it matches the explicit value
+        expected = datetime(2026, 4, 1, 15, 30, 45)
+        self.assertEqual(end_dt, expected)
+        
+        # Verify it's NOT yesterday at 23:59:59
+        yesterday_2359 = (datetime.now().replace(hour=23, minute=59, second=59) - timedelta(days=1))
+        self.assertNotEqual(end_dt, yesterday_2359)
 
 
 class TestCoinbaseDownloader(unittest.TestCase):

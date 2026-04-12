@@ -5,7 +5,7 @@ Handles downloading quote data from Coinbase
 
 import logging
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 import requests
@@ -201,7 +201,7 @@ class CoinbaseDownloader:
             for candle in batch_candles:
                 candles.append({
                     'symbol': symbol,
-                    'time': datetime.fromtimestamp(candle[0]).isoformat(),
+                    'time': datetime.fromtimestamp(candle[0], tz=timezone.utc).isoformat(),
                     'low': float(candle[1]),
                     'high': float(candle[2]),
                     'open': float(candle[3]),
