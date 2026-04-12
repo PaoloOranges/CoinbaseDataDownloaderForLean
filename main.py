@@ -61,7 +61,7 @@ def list_symbols() -> None:
         sys.exit(1)
 
 
-def download_data(output_dir: str, symbols_file: str, symbols: list, granularity: str, keep_csv: bool = False) -> None:
+def download_data(output_dir: str, symbols_file: str, symbols: list, granularity: str, keep_csv: bool = False, start_time: str = None, end_time: str = None) -> None:
     """Download historical data for specified symbols."""
     logger = logging.getLogger(__name__)
     
@@ -100,14 +100,20 @@ def download_data(output_dir: str, symbols_file: str, symbols: list, granularity
         
         for symbol in symbols:
             try:
-                last_timestamp_str = timestamps.get(symbol, {}).get(granularity)
-                if last_timestamp_str:
-                    start_dt = parse_iso_datetime(last_timestamp_str) + timedelta(seconds=granularity_seconds)
+                if start_time:
+                    start_dt = parse_datetime(start_time)
                 else:
-                    # Default to 1 year ago if no timestamp
-                    start_dt = datetime.now() - timedelta(days=730)
+                    last_timestamp_str = timestamps.get(symbol, {}).get(granularity)
+                    if last_timestamp_str:
+                        start_dt = parse_iso_datetime(last_timestamp_str) + timedelta(seconds=granularity_seconds)
+                    else:
+                        # Default to 1 year ago if no timestamp
+                        start_dt = datetime.now() - timedelta(days=730)
                 
-                end_dt = datetime.now()
+                if end_time:
+                    end_dt = parse_datetime(end_time)
+                else:
+                    end_dt = datetime.now()
                 
                 if start_dt >= end_dt:
                     logger.info(f"✓ {symbol}: No new data to download")
@@ -224,6 +230,14 @@ Examples:
         action='store_true',
         help='Keep CSV files after compression (default: delete them)'
     )
+    download_parser.add_argument(
+        '--start-time',
+        help='Start time for download in YYYYmmDD-HH:MM:SS format (e.g., 20240101-00:00:00). If not provided, uses timestamp file or defaults to 2 years ago'
+    )
+    download_parser.add_argument(
+        '--end-time',
+        help='End time for download in YYYYmmDD-HH:MM:SS format (e.g., 20241231-23:59:59). If not provided, uses current time'
+    )
     
     args = parser.parse_args()
     
@@ -240,7 +254,9 @@ Examples:
                 symbols_file=args.symbols_file,
                 symbols=args.symbols or [],
                 granularity=args.granularity,
-                keep_csv=args.keep_csv
+                keep_csv=args.keep_csv,
+                start_time=getattr(args, 'start_time', None),
+                end_time=getattr(args, 'end_time', None)
             )
     except KeyboardInterrupt:
         logger.info("Operation cancelled by user")
