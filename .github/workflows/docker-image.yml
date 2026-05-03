@@ -8,25 +8,47 @@ on:
 
 env:
   IMAGE_NAME: paolooranges/coinbase-data-downloader-for-lean
-  VERSION: ${{github.ref_name}}
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v4
       with:
         submodules: true
+
+    - name: Determine next version from Docker Hub
+      id: version
+      run: |
+        REPO="paolooranges/coinbase-data-downloader-for-lean"
+
+        TAGS=$(curl -s "https://hub.docker.com/v2/repositories/$REPO/tags/?page_size=100" \
+          | jq -r '.results[].name' \
+          | grep -E '^[0-9]+$' || true)
+
+        if [ -z "$TAGS" ]; then
+          NEXT=1
+        else
+          HIGHEST=$(echo "$TAGS" | sort -n | tail -1)
+          NEXT=$((HIGHEST + 1))
+        fi
+
+        echo "version=$NEXT" >> $GITHUB_OUTPUT
+
     - name: Login to Docker Hub
       uses: docker/login-action@v4
       with:
         username: ${{ vars.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
+
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v4
+
     - name: Build and push
       uses: docker/build-push-action@v7
       with:
         context: .
-        push: ${{ github.event_name == 'release' && true || false }}
-        tags: ${{ env.IMAGE_NAME }}:${{env.VERSION}}, ${{ env.IMAGE_NAME }}:latest
+        push: ${{ github.event_name == 'release' }}
+        tags: |
+          ${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
+          ${{ env.IMAGE_NAME }}:latest
