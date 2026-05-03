@@ -211,8 +211,8 @@ Examples:
     )
     download_parser.add_argument(
         '--symbols-file',
-        default='data/coinbase-download-symbols.txt',
-        help='File containing symbols to download (default: data/coinbase-download-symbols.txt)'
+        default='coinbase-download-symbols.txt',
+        help='File containing symbols to download (default: coinbase-download-symbols.txt)'
     )
     download_parser.add_argument(
         '--output',
