@@ -161,16 +161,25 @@ def parse_symbols_file(file_path: str) -> list[str]:
     Returns:
         List of symbol strings
     """
-    symbols = []
+    symbols: list[str] = []
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
-            # Split by comma, semicolon, or newline
-            parts = re.split(r'[,\n;]+', content)
-            for part in parts:
-                symbol = part.strip()
-                if symbol and validate_symbol_format(symbol):
-                    symbols.append(symbol)
+            # Split into logical lines first, ignore comments (#) and empty lines
+            lines = re.split(r"[\r\n]+", content)
+            for line in lines:
+                # Remove inline comments
+                line = line.split('#', 1)[0]
+                # Split by comma or semicolon within the line
+                parts = re.split(r"[,;]+", line)
+                for part in parts:
+                    symbol = part.strip()
+                    if not symbol:
+                        continue
+                    # Normalize to uppercase for validation and downstream use
+                    symbol = symbol.upper()
+                    if validate_symbol_format(symbol):
+                        symbols.append(symbol)
     except FileNotFoundError:
         raise ValueError(f"Symbols file not found: {file_path}")
     except Exception as e:

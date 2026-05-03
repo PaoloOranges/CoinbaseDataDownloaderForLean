@@ -86,7 +86,9 @@ class DataHandler:
         
         granularity_folder = output_dir / granularity_lower
         granularity_folder.mkdir(parents=True, exist_ok=True)
-        
+
+        # For MINUTE granularity we create a symbol-specific subfolder;
+        # for HOUR and DAILY we place files directly under the granularity folder.
         if granularity == 'MINUTE':
             base_folder = granularity_folder / symbol_clean
             base_folder.mkdir(parents=True, exist_ok=True)
@@ -103,15 +105,15 @@ class DataHandler:
                     csv_filename = f"{date_str}_{symbol_clean}_minute_trade.csv"
                     csv_filepath = base_folder / csv_filename
                     self._write_csv(csv_filepath, day_items, granularity)
-                    
+
                     zip_filename = f"{date_str}_trade.zip"
                     zip_filepath = base_folder / zip_filename
                     self._zip_files(zip_filepath, [(csv_filepath, csv_filename)])
-                    
+
                     if not keep_csv:
                         csv_filepath.unlink()
                         self.logger.debug(f"Deleted temporary CSV: {csv_filepath}")
-                    
+
                     saved_zips += 1
                 else:
                     csv_filename = f"{date_str}_{symbol_clean}_{granularity_lower}_trade.csv"
@@ -124,7 +126,7 @@ class DataHandler:
         
         if granularity != 'MINUTE' and temp_csv_files:
             zip_filename = f"{symbol_clean}_trade.zip"
-            zip_filepath = base_folder / zip_filename
+            zip_filepath = granularity_folder / zip_filename
             try:
                 self._zip_files(zip_filepath, temp_csv_files)
                 self.logger.info(f"Saved {sum(len(items) for items in quotes_by_date.values())} quotes to {zip_filepath}")

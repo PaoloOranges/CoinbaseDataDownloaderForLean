@@ -222,8 +222,8 @@ Examples:
     download_parser.add_argument(
         '--granularity',
         choices=['MINUTE', 'HOUR', 'DAILY'],
-        default='MINUTE',
-        help='Granularity of quote data (default: MINUTE)'
+        default=None,
+        help='Granularity of quote data. If omitted, downloads for all granularities (MINUTE, HOUR, DAILY)'
     )
     download_parser.add_argument(
         '--keep-csv',
@@ -249,15 +249,22 @@ Examples:
         if args.command == 'list-symbols':
             list_symbols()
         elif args.command == 'download':
-            download_data(
-                output_dir=args.output,
-                symbols_file=args.symbols_file,
-                symbols=args.symbols or [],
-                granularity=args.granularity,
-                keep_csv=args.keep_csv,
-                start_time=getattr(args, 'start_time', None),
-                end_time=getattr(args, 'end_time', None)
-            )
+            # If granularity omitted, run for all available granularities
+            granularity = sorted(GRANULARITY_SECONDS.keys())
+            if args.granularity is not None:
+                granularity = [args.granularity]
+
+            for g in granularity:
+                print(f"==> Running download for granularity: {g}")
+                download_data(
+                    output_dir=args.output,
+                    symbols_file=args.symbols_file,
+                    symbols=args.symbols or [],
+                    granularity=g,
+                    keep_csv=args.keep_csv,
+                    start_time=getattr(args, 'start_time', None),
+                    end_time=getattr(args, 'end_time', None)
+                    )
     except KeyboardInterrupt:
         logger.info("Operation cancelled by user")
         sys.exit(0)
