@@ -30,7 +30,7 @@
     "ghcr.io/devcontainers/features/git:1": {}
   },
   "remoteUser": "root",
-  "postCreateCommand": "pip install --upgrade pip && pip install -r requirements.txt",
+  "postCreateCommand": "bash .devcontainer/postCreateCommand.sh",
   "postStartCommand": "echo 'Development container started. Python 3.14 ready!'",
   "forwardPorts": [],
   "portsAttributes": {}
