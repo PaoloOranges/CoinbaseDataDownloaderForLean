@@ -202,17 +202,18 @@ class DataHandler:
             self.logger.error(f"Failed to read quotes from {filepath}: {e}")
             raise
     
-    def load_timestamps(self, data_dir: Path) -> Dict[str, Dict[str, str]]:
+    def load_timestamps(self, data_dir: Path, filename: str = "coinbase-download-last-timestamps.json") -> Dict[str, Dict[str, str]]:
         """
         Load last timestamps from JSON file.
         
         Args:
             data_dir: Directory containing the timestamps file
+            filename: Optional timestamps file name
         
         Returns:
             Dictionary of symbol to last timestamp
         """
-        timestamps_file = data_dir / "coinbase-download-last-timestamps.json"
+        timestamps_file = data_dir / filename
         if not timestamps_file.exists():
             return {}
         try:
@@ -222,15 +223,16 @@ class DataHandler:
             self.logger.warning(f"Failed to load timestamps: {e}")
             return {}
     
-    def save_timestamps(self, data_dir: Path, timestamps: Dict[str, Dict[str, str]]) -> None:
+    def save_timestamps(self, data_dir: Path, timestamps: Dict[str, Dict[str, str]], filename: str = "coinbase-download-last-timestamps.json") -> None:
         """
         Save last timestamps to JSON file.
         
         Args:
             data_dir: Directory to save the timestamps file
             timestamps: Dictionary of symbol to last timestamp
+            filename: Optional timestamps file name
         """
-        timestamps_file = data_dir / "coinbase-download-last-timestamps.json"
+        timestamps_file = data_dir / filename
         try:
             data_dir.mkdir(parents=True, exist_ok=True)
             with open(timestamps_file, 'w', encoding='utf-8') as f:

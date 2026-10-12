@@ -31,6 +31,7 @@ setup(
     entry_points={
         'console_scripts': [
             'coinbase-downloader=coinbase_downloader.cli.main:main',
+            'binance-downloader=coinbase_downloader.cli.main:main',
         ],
     },
     classifiers=[

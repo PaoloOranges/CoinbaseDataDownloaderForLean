@@ -91,6 +91,12 @@ def validate_symbol_format(symbol: str) -> bool:
     return bool(re.match(pattern, symbol))
 
 
+def validate_binance_symbol(symbol: str) -> bool:
+    """Validate a symbol matches Binance format: alphanumeric, 5+ chars, uppercase."""
+    pattern = r'^[A-Z0-9]{5,}$'
+    return bool(re.match(pattern, symbol))
+
+
 def format_bytes(bytes_size: float) -> str:
     """
     Format bytes to human-readable format.
@@ -151,17 +157,19 @@ def get_date_range_description(start_dt: datetime, end_dt: datetime) -> str:
     return ", ".join(parts) if parts else "less than 1 minute"
 
 
-def parse_symbols_file(file_path: str) -> list[str]:
+def parse_symbols_file(file_path: str, exchange: str = 'coinbase') -> list[str]:
     """
     Parse symbols from a file, supporting comma, semicolon, or newline separated values.
     
     Args:
         file_path: Path to the symbols file
+        exchange: Symbol format to validate ('coinbase' or 'binance')
     
     Returns:
         List of symbol strings
     """
     symbols: list[str] = []
+    validator = validate_symbol_format if exchange == 'coinbase' else validate_binance_symbol
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
@@ -178,7 +186,7 @@ def parse_symbols_file(file_path: str) -> list[str]:
                         continue
                     # Normalize to uppercase for validation and downstream use
                     symbol = symbol.upper()
-                    if validate_symbol_format(symbol):
+                    if validator(symbol):
                         symbols.append(symbol)
     except FileNotFoundError:
         raise ValueError(f"Symbols file not found: {file_path}")

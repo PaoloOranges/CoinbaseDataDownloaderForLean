@@ -3,6 +3,7 @@
 
 # Coinbase API Configuration
 COINBASE_API_BASE_URL = "https://api.exchange.coinbase.com"
+BINANCE_API_BASE_URL = "https://api.binance.com"
 
 # Rate limiting configuration
 REQUEST_TIMEOUT_SECONDS = 30

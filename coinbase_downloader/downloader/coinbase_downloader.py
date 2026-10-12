@@ -3,91 +3,45 @@ Coinbase API interaction module
 Handles downloading quote data from Coinbase
 """
 
-import logging
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 
+from coinbase_downloader.downloader.base import BaseDownloader
+from coinbase_downloader.utils.utils import normalize_symbol, validate_symbol_format
 
-class CoinbaseDownloader:
+
+class CoinbaseDownloader(BaseDownloader):
     """Handles downloading data from Coinbase APIs."""
-    
+
     BASE_URL = "https://api.exchange.coinbase.com"
     MAX_CANDLES_PER_REQUEST = 300
     MAX_REQUESTS_PER_SECOND = 15
     MAX_RETRIES = 3
     BACKOFF_FACTOR = 0.5
     CACHE_TTL_SECONDS = 300
-    
-    def __init__(self):
-        """Initialize the Coinbase downloader."""
-        self.logger = logging.getLogger(__name__)
-        self.session = requests.Session()
-        self.session.headers.update({
-            'User-Agent': 'CoinbaseDataDownloader/1.0'
-        })
-        self._symbols_cache: Optional[List[str]] = None
-        self._symbols_cache_time: float = 0.0
-        self._last_request_time: float = 0.0
-    
-    def _throttle(self) -> None:
-        """Throttle requests to respect Coinbase rate limits."""
-        min_interval = 1.0 / self.MAX_REQUESTS_PER_SECOND
-        elapsed = time.monotonic() - self._last_request_time
-        if elapsed < min_interval:
-            time.sleep(min_interval - elapsed)
-        self._last_request_time = time.monotonic()
-    
-    def _get_retry_after(self, response: requests.Response) -> Optional[float]:
-        """Parse Retry-After header if present."""
-        retry_after = response.headers.get('Retry-After') if response is not None else None
-        if retry_after is None:
-            return None
-        try:
-            return float(retry_after)
-        except (TypeError, ValueError):
-            return None
 
-    def _request_with_retry(
-        self,
-        method: str,
-        url: str,
-        params: Optional[Dict[str, Any]] = None,
-        headers: Optional[Dict[str, str]] = None
-    ) -> requests.Response:
-        """Execute an HTTP request with retries and exponential backoff."""
-        for attempt in range(1, self.MAX_RETRIES + 1):
-            try:
-                self._throttle()
-                response = self.session.request(
-                    method,
-                    url,
-                    params=params,
-                    headers=headers,
-                    timeout=10
-                )
-                if response.status_code == 429:
-                    raise requests.exceptions.HTTPError("Rate limit exceeded", response=response)
-                response.raise_for_status()
-                return response
-            except requests.exceptions.RequestException as e:
-                if attempt == self.MAX_RETRIES:
-                    self.logger.error(f"Request failed after {attempt} attempts: {e}")
-                    raise
-                sleep_seconds = self.BACKOFF_FACTOR * (2 ** (attempt - 1))
-                if isinstance(e, requests.exceptions.HTTPError) and getattr(e, 'response', None) is not None:
-                    if e.response.status_code == 429:
-                        retry_after = self._get_retry_after(e.response)
-                        if retry_after is not None:
-                            sleep_seconds = retry_after
-                self.logger.warning(
-                    f"Request attempt {attempt} failed for {url}: {e}; retrying in {sleep_seconds:.1f}s"
-                )
-                time.sleep(sleep_seconds)
-        raise RuntimeError("Unexpected request retry failure")
-    
+    @property
+    def default_symbols_file(self) -> str:
+        return 'coinbase-download-symbols.txt'
+
+    @property
+    def timestamps_filename(self) -> str:
+        return 'coinbase-download-last-timestamps.json'
+
+    @staticmethod
+    def normalize_symbol(symbol: str) -> str:
+        return normalize_symbol(symbol)
+
+    def validate_symbol(self, symbol: str) -> bool:
+        """Check if a symbol is valid using cached product metadata."""
+        try:
+            return symbol in self.get_available_symbols()
+        except requests.exceptions.RequestException:
+            return validate_symbol_format(symbol)
+
     def get_available_symbols(self) -> List[str]:
         """
         Fetch all available trading pairs from Coinbase.

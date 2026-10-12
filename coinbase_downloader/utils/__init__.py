@@ -11,6 +11,7 @@ from coinbase_downloader.utils.utils import (
     parse_datetime,
     parse_iso_datetime,
     parse_symbols_file,
+    validate_binance_symbol,
     validate_datetime_format,
     validate_symbol_format,
 )
@@ -24,6 +25,7 @@ __all__ = [
     'parse_datetime',
     'parse_iso_datetime',
     'parse_symbols_file',
+    'validate_binance_symbol',
     'validate_datetime_format',
     'validate_symbol_format',
 ]

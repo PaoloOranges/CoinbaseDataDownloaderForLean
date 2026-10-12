@@ -10,6 +10,7 @@ import logging.handlers
 import sys
 from pathlib import Path
 
+from coinbase_downloader.downloader.binance_downloader import BinanceDownloader
 from coinbase_downloader.downloader.coinbase_downloader import CoinbaseDownloader
 from coinbase_downloader.handlers.data_handler import DataHandler
 from coinbase_downloader.utils.utils import (
@@ -17,8 +18,17 @@ from coinbase_downloader.utils.utils import (
     parse_datetime,
     parse_iso_datetime,
     parse_symbols_file,
-    validate_symbol_format,
 )
+
+
+def get_downloader(exchange: str = 'coinbase'):
+    """Return the configured exchange downloader."""
+    normalized = (exchange or 'coinbase').lower()
+    if normalized == 'coinbase':
+        return CoinbaseDownloader()
+    if normalized == 'binance':
+        return BinanceDownloader()
+    raise ValueError(f"Unsupported exchange: {exchange}")
 
 
 def setup_logging(verbose: bool = False, output_dir: str = None) -> None:
@@ -38,66 +48,66 @@ def setup_logging(verbose: bool = False, output_dir: str = None) -> None:
         logging.getLogger().addHandler(handler)
 
 
-def list_symbols() -> None:
-    """List all available symbols on Coinbase."""
+def list_symbols(exchange: str = 'coinbase') -> None:
+    """List all available symbols on the selected market."""
     logger = logging.getLogger(__name__)
     logger.info("Fetching available symbols...")
-    
+
     try:
-        downloader = CoinbaseDownloader()
+        downloader = get_downloader(exchange)
         symbols = downloader.get_available_symbols()
-        
+
         if not symbols:
             print("No symbols found.")
             return
-        
-        print(f"\nAvailable Coinbase symbols ({len(symbols)} total):\n")
+
+        exchange_name = (exchange or 'coinbase').capitalize()
+        print(f"\nAvailable {exchange_name} symbols ({len(symbols)} total):\n")
         for symbol in sorted(symbols):
             print(f"  {symbol}")
         print()
-        
+
     except Exception as e:
         logger.error(f"Failed to fetch symbols: {e}")
         sys.exit(1)
 
 
-def download_data(output_dir: str, symbols_file: str, symbols: list, granularity: str, keep_csv: bool = False, start_time: str = None, end_time: str = None) -> None:
+def download_data(output_dir: str, symbols_file: str, symbols: list, granularity: str, keep_csv: bool = False, start_time: str = None, end_time: str = None, exchange: str = 'coinbase') -> None:
     """Download historical data for specified symbols."""
     logger = logging.getLogger(__name__)
-    
+
     try:
-        # Load symbols
+        downloader = get_downloader(exchange)
+        resolved_symbols_file = symbols_file or downloader.default_symbols_file
         if not symbols:
-            symbols = parse_symbols_file(symbols_file)
+            symbols = parse_symbols_file(resolved_symbols_file, exchange=exchange)
             if not symbols:
-                raise ValueError(f"No symbols found in {symbols_file}")
-        
-        invalid_formats = [symbol for symbol in symbols if not validate_symbol_format(symbol)]
+                raise ValueError(f"No symbols found in {resolved_symbols_file}")
+
+        invalid_formats = [symbol for symbol in symbols if not downloader.validate_symbol(symbol)]
         if invalid_formats:
             raise ValueError(f"Invalid symbol format(s): {', '.join(invalid_formats)}")
-        
-        granularity_seconds = GRANULARITY_SECONDS[granularity]
-        
-        # Create output directory if it doesn't exist
+
+        granularity_seconds = downloader.granularity_map[granularity]
+
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
-        
-        downloader = CoinbaseDownloader()
+
         available_symbols = downloader.get_available_symbols()
         unknown_symbols = [symbol for symbol in symbols if symbol not in available_symbols]
         if unknown_symbols:
             raise ValueError(f"Unknown symbol(s): {', '.join(unknown_symbols)}")
-        
+
         data_handler = DataHandler()
-        data_dir = Path(symbols_file).parent
-        timestamps = data_handler.load_timestamps(data_dir)
-        
+        data_dir = Path(resolved_symbols_file).parent if resolved_symbols_file else Path(output_dir)
+        timestamps = data_handler.load_timestamps(data_dir, downloader.timestamps_filename)
+
         logger.info(f"Starting download for {len(symbols)} symbol(s)")
         logger.info(f"Granularity: {granularity} ({granularity_seconds} seconds)")
         logger.info(f"Keep CSV files: {keep_csv}")
-        
+
         from datetime import datetime, timedelta, timezone
-        
+
         for symbol in symbols:
             try:
                 if start_time:
@@ -107,51 +117,46 @@ def download_data(output_dir: str, symbols_file: str, symbols: list, granularity
                     if last_timestamp_str:
                         start_dt = parse_iso_datetime(last_timestamp_str) + timedelta(seconds=granularity_seconds)
                     else:
-                        # Default to 2 years ago if no timestamp
                         start_dt = datetime.now(tz=timezone.utc) - timedelta(days=730)
-                
+
                 if end_time:
                     end_dt = parse_datetime(end_time)
                 else:
                     end_dt = (datetime.now(tz=timezone.utc).replace(hour=23, minute=59, second=59) - timedelta(days=1))
-                
+
                 if start_dt >= end_dt:
                     logger.info(f"✓ {symbol}: No new data to download")
                     continue
-                
+
                 logger.info(f"Downloading data for {symbol} from {start_dt} to {end_dt}...")
-                
-                # Download data
+
                 quotes, max_timestamp = downloader.get_historical_data(
                     symbol=symbol,
                     start_time=start_dt,
                     end_time=end_dt,
                     granularity=granularity_seconds
                 )
-                
+
                 if quotes:
-                    # Save to compressed ZIP files with new folder structure
                     data_handler.save_quotes_by_day(quotes, output_path, granularity, keep_csv=keep_csv)
-                    
-                    # Update timestamp
+
                     if max_timestamp:
                         timestamps.setdefault(symbol, {})[granularity] = max_timestamp
-                    
+
                     logger.info(f"✓ {symbol}: {len(quotes)} quotes saved")
                     print(f"✓ {symbol}: Saved {len(quotes)} quotes to ZIP file(s)")
                 else:
                     logger.info(f"✓ {symbol}: No new quotes")
                     print(f"✓ {symbol}: No new quotes")
-                
+
             except Exception as e:
                 logger.error(f"Failed to download data for {symbol}: {e}")
                 print(f"✗ {symbol}: Error - {e}")
-        
-        # Save updated timestamps
-        data_handler.save_timestamps(data_dir, timestamps)
-        
+
+        data_handler.save_timestamps(data_dir, timestamps, downloader.timestamps_filename)
+
         logger.info("Download complete!")
-        
+
     except ValueError as e:
         logger.error(str(e))
         sys.exit(1)
@@ -189,14 +194,26 @@ Examples:
         action='store_true',
         help='Enable verbose logging'
     )
-    
+    parser.add_argument(
+        '--exchange',
+        choices=['coinbase', 'binance'],
+        default='coinbase',
+        help='Exchange to download data from (default: coinbase)'
+    )
+
     subparsers = parser.add_subparsers(dest='command', help='Command to execute')
     subparsers.required = True
     
     # List symbols command
-    subparsers.add_parser(
+    list_symbols_parser = subparsers.add_parser(
         'list-symbols',
-        help='List all available symbols on Coinbase'
+        help='List all available symbols on the selected exchange'
+    )
+    list_symbols_parser.add_argument(
+        '--exchange',
+        choices=['coinbase', 'binance'],
+        default='coinbase',
+        help='Exchange to list symbols from (default: coinbase)'
     )
     
     # Download command
@@ -205,14 +222,20 @@ Examples:
         help='Download historical quote data'
     )
     download_parser.add_argument(
+        '--exchange',
+        choices=['coinbase', 'binance'],
+        default='coinbase',
+        help='Exchange to download data from (default: coinbase)'
+    )
+    download_parser.add_argument(
         '--symbols',
         nargs='*',
         help='Symbol(s) to download (e.g., BTC-USD, ETH-EUR). If not provided, read from symbols-file'
     )
     download_parser.add_argument(
         '--symbols-file',
-        default='coinbase-download-symbols.txt',
-        help='File containing symbols to download (default: coinbase-download-symbols.txt)'
+        default=None,
+        help='File containing symbols to download; defaults to the exchange-specific symbols file'
     )
     download_parser.add_argument(
         '--output',
@@ -247,9 +270,8 @@ Examples:
     
     try:
         if args.command == 'list-symbols':
-            list_symbols()
+            list_symbols(exchange=args.exchange)
         elif args.command == 'download':
-            # If granularity omitted, run for all available granularities
             granularity = sorted(GRANULARITY_SECONDS.keys())
             if args.granularity is not None:
                 granularity = [args.granularity]
@@ -263,8 +285,9 @@ Examples:
                     granularity=g,
                     keep_csv=args.keep_csv,
                     start_time=getattr(args, 'start_time', None),
-                    end_time=getattr(args, 'end_time', None)
-                    )
+                    end_time=getattr(args, 'end_time', None),
+                    exchange=args.exchange,
+                )
     except KeyboardInterrupt:
         logger.info("Operation cancelled by user")
         sys.exit(0)
