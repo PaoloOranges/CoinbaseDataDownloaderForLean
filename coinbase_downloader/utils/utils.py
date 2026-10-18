@@ -169,6 +169,9 @@ def parse_symbols_file(file_path: str, exchange: str = 'coinbase') -> list[str]:
         List of symbol strings
     """
     symbols: list[str] = []
+    if exchange not in {'coinbase', 'binance'}:
+        raise ValueError(f"Unsupported exchange: {exchange}")
+
     validator = validate_symbol_format if exchange == 'coinbase' else validate_binance_symbol
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
@@ -186,6 +189,8 @@ def parse_symbols_file(file_path: str, exchange: str = 'coinbase') -> list[str]:
                         continue
                     # Normalize to uppercase for validation and downstream use
                     symbol = symbol.upper()
+                    if exchange == 'binance' and validate_symbol_format(symbol):
+                        symbol = symbol.replace('-', '')
                     if validator(symbol):
                         symbols.append(symbol)
     except FileNotFoundError:

@@ -35,6 +35,14 @@ def test_parse_symbols_file_binance(tmp_path):
     assert symbols == ["BTCUSDT", "ETHUSDT", "ADAUSDT", "SOLUSDT"]
 
 
+def test_shared_symbols_file_parses_for_both_exchanges(tmp_path):
+    p = tmp_path / "shared-symbols.txt"
+    p.write_text("BTC-USDT\nETH-EUR\nSOLUSDT\n", encoding="utf-8")
+
+    assert parse_symbols_file(str(p), exchange="coinbase") == ["BTC-USDT", "ETH-EUR"]
+    assert parse_symbols_file(str(p), exchange="binance") == ["BTCUSDT", "ETHEUR", "SOLUSDT"]
+
+
 def test_binance_symbol_validation():
     assert validate_binance_symbol("BTCUSDT")
     assert validate_binance_symbol("ETHUSDT")

@@ -19,14 +19,16 @@ python main.py --help
 List available symbols:
 
 ```bash
+# Lists Coinbase symbols only (the default exchange)
 python main.py list-symbols
-```
 
-List Binance symbols:
-
-```bash
+# Lists Binance symbols only; run separately from Coinbase
 python main.py list-symbols --exchange binance
 ```
+
+`list-symbols` reports one exchange per invocation. Run it once for each
+exchange to see both lists; the Binance list uses Binance's native symbol
+format.
 
 Download data (default behavior: downloads all granularities if `--granularity` is omitted):
 
@@ -40,8 +42,9 @@ python main.py download --symbols BTC-USD ETH-EUR --output ./data
 # Download only HOUR granularity for symbols in a file
 python main.py download --symbols-file my-symbols.txt --granularity HOUR --output ./data
 
-# Download Binance symbols (Binance symbols use the exchange's native format)
-python main.py download --exchange binance --symbols BTCUSDT ETHUSDT --output ./data
+# Read the same BASE-QUOTE file on either exchange.
+# For Binance, BTC-USDT is sent to the API as BTCUSDT.
+python main.py download --exchange binance --symbols-file shared-symbols.txt --output ./data
 
 # Read Binance symbols from binance-download-symbols.txt
 python main.py download --exchange binance --output ./data
@@ -51,9 +54,9 @@ python main.py download --exchange binance --output ./data
 
 See the CLI help for full options. Notable flags:
 
-- `--exchange`: `coinbase` or `binance` (default: `coinbase`). Can be used with either `list-symbols` or `download`.
+- `--exchange`: `coinbase` or `binance` (default: `coinbase`). Each command uses one exchange; `list-symbols` does not combine results.
 - `--symbols`: One or more symbols (e.g., `BTC-USD ETH-EUR`).
-- `--symbols-file`: Path to a symbols file. Defaults to `coinbase-download-symbols.txt` or `binance-download-symbols.txt` according to the selected exchange. Supports comma/semicolon-separated values or one symbol per line. Lines can contain comments starting with `#`.
+- `--symbols-file`: Path to a symbols file. Defaults to `coinbase-download-symbols.txt` or `binance-download-symbols.txt` according to the selected exchange. An explicitly supplied file can be shared: use `BASE-QUOTE` notation (for example, `BTC-USDT`), which is converted to Binance's native `BTCUSDT` format when needed. Comma/semicolon-separated values and one symbol per line are supported; lines can contain comments starting with `#`.
 - `--output`: Required. Directory where CSV/ZIP outputs will be saved.
 - `--granularity`: `MINUTE`, `HOUR`, or `DAILY`. If omitted, the tool downloads data for all granularities.
 - `--keep-csv`: Keep CSV files after compression (default: CSV files are deleted after zipping).
@@ -62,7 +65,7 @@ Date/time format for `--start-time` and `--end-time` is `yyyyMMdd-HH:MM:SS` (UTC
 
 ### Exchange symbols and progress timestamps
 
-Coinbase symbols use the `BASE-QUOTE` format, such as `BTC-USD`. Binance symbols use the native concatenated format, such as `BTCUSDT`; symbols are passed to Binance without quote-currency remapping.
+Use `BASE-QUOTE` (such as `BTC-USD` or `BTC-USDT`) in symbols files for a common, shareable format. For Binance, the separator is removed before the symbol is sent to the API (`BTC-USDT` becomes `BTCUSDT`); no quote-currency remapping is performed, so `BTC-USD` becomes `BTCUSD`, not `BTCUSDT`. Existing Binance-native entries such as `BTCUSDT` remain accepted. Both exchanges still validate that every requested market is available on the selected exchange. `list-symbols` displays the selected exchange's own symbol format (Coinbase's hyphenated format or Binance's concatenated format).
 
 Each exchange keeps download progress in a separate file alongside the symbols file: `coinbase-download-last-timestamps.json` or `binance-download-last-timestamps.json`. When no symbols file is specified, these files are located in the current working directory.
 
@@ -96,7 +99,7 @@ Minute granularity is saved per-day as individual ZIPs; hour/daily granularity i
 
 - Supports CSV (comma/semicolon) or one symbol per line.
 - Lines starting with `#` or inline comments after `#` are ignored.
-- Symbols are normalized to uppercase and validated against the selected exchange's format (`BTC-USD` for Coinbase, `BTCUSDT` for Binance).
+- Symbols are normalized to uppercase. `BASE-QUOTE` entries work for either exchange; Binance's separator is removed before API requests. Existing concatenated Binance symbols are also accepted.
 
 ## Changes in this release
 

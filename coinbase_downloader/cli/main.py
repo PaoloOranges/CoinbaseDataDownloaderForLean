@@ -168,18 +168,28 @@ def download_data(output_dir: str, symbols_file: str, symbols: list, granularity
 def main() -> None:
     """Main entry point."""
     parser = argparse.ArgumentParser(
-        description='Download quote data from Coinbase',
+        description='Download quote data from Coinbase or Binance',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog='''
 Examples:
-  # List all available symbols
+  # List Coinbase symbols (default exchange)
   python main.py list-symbols
+
+  # List Binance symbols separately
+  python main.py list-symbols --exchange binance
   
-  # Download data for symbols from file (default)
+  # Download Coinbase symbols from the default Coinbase symbols file
   python main.py download --output ./data
+
+  # Download Binance symbols from the default Binance symbols file
+  python main.py download --exchange binance --output ./data
   
-  # Download data for specific symbols
+  # Download specific Coinbase symbols
   python main.py download --symbols BTC-USD ETH-EUR --output ./data
+
+  # Use one BASE-QUOTE symbols file with either exchange
+  python main.py download --exchange coinbase --symbols-file shared-symbols.txt --output ./data
+  python main.py download --exchange binance --symbols-file shared-symbols.txt --output ./data
   
   # Download data for symbols from custom file
   python main.py download --symbols-file my-symbols.txt --output ./data --granularity HOUR
@@ -198,7 +208,7 @@ Examples:
         '--exchange',
         choices=['coinbase', 'binance'],
         default='coinbase',
-        help='Exchange to download data from (default: coinbase)'
+        help='Exchange to query or download from; each command uses one exchange (default: coinbase)'
     )
 
     subparsers = parser.add_subparsers(dest='command', help='Command to execute')
@@ -213,7 +223,7 @@ Examples:
         '--exchange',
         choices=['coinbase', 'binance'],
         default='coinbase',
-        help='Exchange to list symbols from (default: coinbase)'
+        help='Exchange whose symbols to list (one exchange per command; default: coinbase)'
     )
     
     # Download command
@@ -225,17 +235,17 @@ Examples:
         '--exchange',
         choices=['coinbase', 'binance'],
         default='coinbase',
-        help='Exchange to download data from (default: coinbase)'
+        help='Exchange to download from (default: coinbase)'
     )
     download_parser.add_argument(
         '--symbols',
         nargs='*',
-        help='Symbol(s) to download (e.g., BTC-USD, ETH-EUR). If not provided, read from symbols-file'
+        help='Exchange-native symbol(s) to download. Use --symbols-file for shared BASE-QUOTE symbols'
     )
     download_parser.add_argument(
         '--symbols-file',
         default=None,
-        help='File containing symbols to download; defaults to the exchange-specific symbols file'
+        help='Symbols file (BASE-QUOTE works for both exchanges; Binance symbols are converted). Defaults to an exchange-specific file'
     )
     download_parser.add_argument(
         '--output',
