@@ -20,4 +20,4 @@ RUN pip install --no-cache-dir -e .
 RUN mkdir -p /app/data
 
 # Set entrypoint to the console script
-ENTRYPOINT ["coinbase-downloader", "download"]
+ENTRYPOINT ["coinbase-downloader"]
